@@ -1,0 +1,100 @@
+// Gramática del pseudolenguaje MSQL (se compila a PostgreSQL).
+//
+// Convenciones de Lark usadas aquí:
+//   - reglas en minúscula, terminales en MAYÚSCULA.
+//   - un terminal que empieza con guion bajo (_FROM) se reconoce pero NO
+//     aparece en el árbol: son las palabras clave y los separadores.
+//   - "texto"i  es un literal que ignora mayúsculas y minúsculas.
+//   - "-> alias" le da nombre a una alternativa; el Transformer usa ese nombre.
+//
+// El lenguaje es orientado a líneas: cada instrucción ocupa una línea y se
+// separa de la siguiente por un salto de línea (terminal _NL).
+
+start: _NL? (instruccion _NL)*
+
+instruccion: make
+           | get
+           | put
+           | drop
+
+// ---------------------------------------------------------------- MAKE
+make: _MAKE NAME "(" campo ("," campo)* ")"
+campo: NAME tipo
+tipo: TIPO [REQUERIDO]
+
+// ----------------------------------------------------------------- GET
+get: _GET columnas _FROM NAME [donde] [orden] [limite]
+
+columnas: _ALL                  -> todas_columnas
+        | NAME ("," NAME)*      -> lista_columnas
+
+orden: _SORT NAME [DIRECCION]
+limite: _TOP ENTERO
+
+// ----------------------------------------------------------------- PUT
+put: _PUT NAME "(" asignacion ("," asignacion)* ")" [donde]
+asignacion: NAME "=" valor
+
+// ---------------------------------------------------------------- DROP
+drop: _DROP NAME [donde]
+
+// -------------------------------------------------- Condiciones (WHERE)
+// Un nivel de regla por nivel de precedencia: AND liga más fuerte que OR.
+// Ambas son recursivas por la izquierda, lo que da asociatividad izquierda
+// y es lo recomendado para LALR(1).
+donde: _WHERE condicion
+
+?condicion: condicion _OR conjuncion    -> o_logico
+          | conjuncion
+
+?conjuncion: conjuncion _AND primaria   -> y_logico
+           | primaria
+
+?primaria: comparacion
+         | "(" condicion ")"
+
+comparacion: NAME OPERADOR valor
+
+valor: NUMERO                           -> numero
+     | CADENA                           -> cadena
+     | _TRUE                            -> verdadero
+     | _FALSE                           -> falso
+
+// ----------------------------------------------------------- Terminales
+// Palabras clave (insensibles a mayúsculas).
+_MAKE:  "make"i
+_GET:   "get"i
+_PUT:   "put"i
+_DROP:  "drop"i
+_FROM:  "from"i
+_WHERE: "where"i
+_SORT:  "sort"i
+_TOP:   "top"i
+_ALL:   "all"i
+_AND:   "and"i
+_OR:    "or"i
+_TRUE:  "true"i
+_FALSE: "false"i
+
+// Tipos del pseudolenguaje. El "\b" evita que "texto" se lea como "text" + "o".
+TIPO: /(id|num|text|bool|time)\b/i
+REQUERIDO: "!"
+DIRECCION: "asc"i | "desc"i
+
+// Identificadores (tablas y campos). Una palabra como "all" coincide a la vez
+// con _ALL y con NAME; en los estados donde ambos son válidos, Lark da
+// prioridad al literal (_ALL). "allowance" sigue siendo un NAME porque NAME
+// reconoce más caracteres.
+NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
+
+OPERADOR: />=|<=|<>|!=|=|<|>/
+NUMERO: /-?\d+(\.\d+)?/
+ENTERO: /\d+/
+
+// Cadenas con comillas simples o dobles; una comilla repetida es una comilla literal.
+CADENA: /'([^'\n]|'')*'/ | /"([^"\n]|"")*"/
+
+// Un salto de línea (o varios, con líneas en blanco) cuenta como un solo separador.
+_NL: /(\r?\n[ \t]*)+/
+
+%ignore /[ \t]+/

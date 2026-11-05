@@ -1,0 +1,11 @@
+CREATE TABLE type_catalog (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  count NUMERIC,
+  required_count NUMERIC NOT NULL,
+  label TEXT,
+  required_label TEXT NOT NULL,
+  enabled BOOLEAN DEFAULT FALSE,
+  required_enabled BOOLEAN DEFAULT FALSE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  required_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
